@@ -52,7 +52,7 @@ def extract_sentences(filename: str) -> Tuple[List[SentencePair], List[LabeledAl
         return list(map(lambda x: tuple(np.fromstring(x, sep='-', dtype=np.int32)), text.split()))
     
     # fixing & chars
-    with open(filename, 'r') as f:
+    with open(filename, 'r', encoding='utf-8') as f:
         content = f.read()
     content = content.replace('&', '&amp;')
 
