@@ -86,7 +86,16 @@ class WordAligner(BaseAligner):
             posteriors: list of np.arrays with shape (src_len, target_len). posteriors[i][j][k] gives a posterior
             probability of target token k to be aligned to source token j in a sentence i.
         """
-        pass
+        # def _get_mask(par):
+        #     mask = np.zeros((par.source_tokens.shape[0], par.target_tokens.shape[0]), dtype=bool)
+        #     mask[par.source_tokens, :][:, par.target_tokens] = True
+        #     return mask
+        
+        # self.masks = [_get_mask(par) for par in parallel_corpus]
+
+        # print(self.translation_probs[parallel_corpus[0].source_tokens][:, parallel_corpus[0].target_tokens].shape)
+        A = [self.translation_probs[par.source_tokens][:, par.target_tokens] / self.translation_probs[par.source_tokens][:, par.target_tokens].sum(axis=0, keepdims=True) for i, par in enumerate(parallel_corpus)]
+        return A
 
     def _compute_elbo(self, parallel_corpus: List[TokenizedSentencePair], posteriors: List[np.array]) -> float:
         """
