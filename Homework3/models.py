@@ -114,9 +114,25 @@ class WordAligner(BaseAligner):
             2) It is preferred to write this computation with 1 cycle only
             
         """
-        pass
+        S = set(np.concatenate([par.source_tokens for par in parallel_corpus], axis=0))
+        T = set(np.concatenate([par.target_tokens for par in parallel_corpus], axis=0))
 
-    def _m_step(self, parallel_corpus: List[TokenizedSentencePair], posteriors: List[np.array]):
+        S, T = list(S), list(T)
+
+        S_d = {tok: idx for idx, tok in enumerate(sorted(S))}
+        T_d = {tok: idx for idx, tok in enumerate(sorted(T))}
+        
+        C = np.zeros((len(S), len(T)))
+
+        for post, par in zip(posteriors, parallel_corpus):
+            src_tokens = par.source_tokens
+            trg_tokens = par.target_tokens
+            for i in range(post.shape[0]):
+                for j in range(post.shape[1]):
+                    C[S_d[src_tokens[i]], T_d[trg_tokens[j]]] += post[i, j]
+        return np.sum(np.log(self.translation_probs[S][:, T]) * C)
+
+    def _m_step(self, parallel_corpus: List[TokenizedSentencePair], posteriors: List[np.array], verbose=0):
         """
         Update model parameters from a parallel corpus and posterior alignment distribution. Also, compute and return
         evidence lower bound after updating the parameters for logging purposes.
@@ -128,7 +144,28 @@ class WordAligner(BaseAligner):
         Returns:
             elbo:  the value of evidence lower bound after applying parameter updates
         """
-        pass
+        S = set(np.concatenate([par.source_tokens for par in parallel_corpus], axis=0))
+        T = set(np.concatenate([par.target_tokens for par in parallel_corpus], axis=0))
+        if verbose:
+            print(f'S, T built. S_shape:{S.shape}, T_shape:{T.shape}')
+        
+        # A = np.zeros((len(S), len(T)))
+        T = list(T)
+        self.translation_probs[:, T] = 0
+
+        import tqdm.tqdm as tqdm
+        for post, par in tqdm(zip(posteriors, parallel_corpus), disable=not verbose):
+            src_tokens = par.source_tokens
+            trg_tokens = par.target_tokens
+            for i in range(post.shape[0]):
+                for j in range(post.shape[1]):
+                    self.translation_probs[src_tokens[i], trg_tokens[j]] += post[i, j]
+        self.translation_probs[:, T] /= self.translation_probs[:, T].sum(axis=0, keepdims=True)
+
+        if verbose:
+            print('Computing ELBO...')
+
+        return self._compute_elbo(parallel_corpus, posteriors)
 
     def fit(self, parallel_corpus):
         """
