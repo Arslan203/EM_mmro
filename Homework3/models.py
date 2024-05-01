@@ -127,9 +127,15 @@ class WordAligner(BaseAligner):
         s = 0
 
         for post, par in zip(posteriors, parallel_corpus):
+            n = par.source_tokens.shape[0]
+            m = par.target_tokens.shape[0]
             src_tokens = np.unique(par.source_tokens, return_counts=True, return_index=True)
             trg_tokens = np.unique(par.target_tokens, return_counts=True, return_index=True)
-            s += np.sum(np.log(self.translation_probs[src_tokens[0]][:, trg_tokens[0]]) * post[src_tokens[1]][:, trg_tokens[1]] * src_tokens[2][:, np.newaxis] * trg_tokens[2][np.newaxis, :], where=self.translation_probs[src_tokens[0]][:, trg_tokens[0]] != 0)
+            tmp = self.translation_probs[src_tokens[0]][:, trg_tokens[0]]
+            tmp[tmp == 0] = 1
+            s += np.sum((np.log(tmp) * post[src_tokens[1]][:, trg_tokens[1]] * src_tokens[2][:, np.newaxis] * trg_tokens[2][np.newaxis, :]))#[self.translation_probs[src_tokens[0]][:, trg_tokens[0]] != 0])
+            s -= np.log(n) * m
+            s -= np.sum(post * np.log(np.clip(post, 1e-20, 1)))
         #     for i in range(post.shape[0]):
         #         for j in range(post.shape[1]):
         #             C[S_d[src_tokens[i]], T_d[trg_tokens[j]]] += post[i, j]
@@ -159,12 +165,14 @@ class WordAligner(BaseAligner):
         self.translation_probs.fill(0)
 
         for post, par in zip(posteriors, parallel_corpus):
-            src_tokens = np.unique(par.source_tokens, return_counts=True, return_index=True)
-            trg_tokens = np.unique(par.target_tokens, return_counts=True, return_index=True)
-            self.translation_probs[src_tokens[0]][:, trg_tokens[0]] += post[src_tokens[1]][:, trg_tokens[1]] * src_tokens[2][:, np.newaxis] * trg_tokens[2][np.newaxis, :]
-            # for i in range(post.shape[0]):
-            #     for j in range(post.shape[1]):
-            #         self.translation_probs[src_tokens[i], trg_tokens[j]] += post[i, j]
+            src_tokens = par.source_tokens
+            trg_tokens = par.target_tokens
+            # src_tokens = np.unique(par.source_tokens, return_counts=True, return_index=True)
+            # trg_tokens = np.unique(par.target_tokens, return_counts=True, return_index=True)
+            # self.translation_probs[src_tokens[0]][:, trg_tokens[0]] += post[src_tokens[1]][:, trg_tokens[1]] * src_tokens[2][:, np.newaxis] * trg_tokens[2][np.newaxis, :]
+            for i in range(post.shape[0]):
+                for j in range(post.shape[1]):
+                    self.translation_probs[src_tokens[i], trg_tokens[j]] += post[i, j]
         self.translation_probs /= self.translation_probs.sum(axis=1, keepdims=True)
 
         if verbose:
