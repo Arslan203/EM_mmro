@@ -131,7 +131,7 @@ class WordAligner(BaseAligner):
             for i in range(post.shape[0]):
                 for j in range(post.shape[1]):
                     C[S_d[src_tokens[i]], T_d[trg_tokens[j]]] += post[i, j]
-        return np.sum(np.log(np.clip(self.translation_probs[S][:, T], 1e-70, 1)) * C)
+        return np.sum((np.log(np.clip(self.translation_probs[S][:, T], 1e-70, 1)) * C)[self.translation_probs[S][:, T] != 0])
 
     def _m_step(self, parallel_corpus: List[TokenizedSentencePair], posteriors: List[np.array], verbose=0):
         """
@@ -160,7 +160,7 @@ class WordAligner(BaseAligner):
             for i in range(post.shape[0]):
                 for j in range(post.shape[1]):
                     self.translation_probs[src_tokens[i], trg_tokens[j]] += post[i, j]
-        self.translation_probs[:, T] /= self.translation_probs[:, T].sum(axis=0, keepdims=True)
+        self.translation_probs[:, T] /= self.translation_probs[:, T].sum(axis=1, keepdims=True)
 
         if verbose:
             print('Computing ELBO...')
@@ -183,7 +183,7 @@ class WordAligner(BaseAligner):
             posteriors = self._e_step(parallel_corpus)
             elbo = self._m_step(parallel_corpus, posteriors, verbose=verbose)
             # print(np.unique(self.translation_probs, return_counts=True))
-            print(elbo)
+            # print(elbo)
             history.append(elbo)
         return history
 
