@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from itertools import product
 from typing import List, Tuple
+# from tqdm import tqdm
 
 import numpy as np
 
@@ -130,7 +131,7 @@ class WordAligner(BaseAligner):
             for i in range(post.shape[0]):
                 for j in range(post.shape[1]):
                     C[S_d[src_tokens[i]], T_d[trg_tokens[j]]] += post[i, j]
-        return np.sum(np.log(self.translation_probs[S][:, T]) * C)
+        return np.sum(np.log(np.clip(self.translation_probs[S][:, T], 1e-70, 1)) * C)
 
     def _m_step(self, parallel_corpus: List[TokenizedSentencePair], posteriors: List[np.array], verbose=0):
         """
@@ -147,14 +148,13 @@ class WordAligner(BaseAligner):
         S = set(np.concatenate([par.source_tokens for par in parallel_corpus], axis=0))
         T = set(np.concatenate([par.target_tokens for par in parallel_corpus], axis=0))
         if verbose:
-            print(f'S, T built. S_shape:{S.shape}, T_shape:{T.shape}')
+            print(f'S, T built. S_shape:{len(S)}, T_shape:{len(T)}')
         
         # A = np.zeros((len(S), len(T)))
         T = list(T)
         self.translation_probs[:, T] = 0
 
-        import tqdm.tqdm as tqdm
-        for post, par in tqdm(zip(posteriors, parallel_corpus), disable=not verbose):
+        for post, par in zip(posteriors, parallel_corpus):
             src_tokens = par.source_tokens
             trg_tokens = par.target_tokens
             for i in range(post.shape[0]):
@@ -167,7 +167,7 @@ class WordAligner(BaseAligner):
 
         return self._compute_elbo(parallel_corpus, posteriors)
 
-    def fit(self, parallel_corpus):
+    def fit(self, parallel_corpus, verbose=0):
         """
         Same as in the base class, but keep track of ELBO values to make sure that they are non-decreasing.
         Sorry for not sticking to my own interface ;)
@@ -181,12 +181,21 @@ class WordAligner(BaseAligner):
         history = []
         for i in range(self.num_iters):
             posteriors = self._e_step(parallel_corpus)
-            elbo = self._m_step(parallel_corpus, posteriors)
+            elbo = self._m_step(parallel_corpus, posteriors, verbose=verbose)
+            # print(np.unique(self.translation_probs, return_counts=True))
+            print(elbo)
             history.append(elbo)
         return history
 
     def align(self, sentences):
-        pass
+        # A = [self.translation_probs[par.source_tokens][:, par.target_tokens] / self.translation_probs[par.source_tokens][:, par.target_tokens].sum(axis=0, keepdims=True) for i, par in enumerate(sentences)]
+        # aligns = [np.argmax(poster, axis=0) + 1 for poster in A]
+        res = []
+        for par in sentences:
+            A = self.translation_probs[par.source_tokens][:, par.target_tokens] / self.translation_probs[par.source_tokens][:, par.target_tokens].sum(axis=0, keepdims=True)
+            aligns_rel = enumerate(np.argmax(A, axis=0) + 1, 1)
+            res.append([(j, i) for i, j in aligns_rel])
+        return res
 
 
 class WordPositionAligner(WordAligner):
