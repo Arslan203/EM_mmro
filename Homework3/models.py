@@ -120,18 +120,21 @@ class WordAligner(BaseAligner):
 
         S, T = list(S), list(T)
 
-        S_d = {tok: idx for idx, tok in enumerate(sorted(S))}
-        T_d = {tok: idx for idx, tok in enumerate(sorted(T))}
+        # S_d = {tok: idx for idx, tok in enumerate(sorted(S))}
+        # T_d = {tok: idx for idx, tok in enumerate(sorted(T))}
         
-        C = np.zeros((len(S), len(T)))
+        # C = np.zeros((len(S), len(T)))
+        s = 0
 
         for post, par in zip(posteriors, parallel_corpus):
-            src_tokens = par.source_tokens
-            trg_tokens = par.target_tokens
-            for i in range(post.shape[0]):
-                for j in range(post.shape[1]):
-                    C[S_d[src_tokens[i]], T_d[trg_tokens[j]]] += post[i, j]
-        return np.sum((np.log(np.clip(self.translation_probs[S][:, T], 1e-70, 1)) * C)[self.translation_probs[S][:, T] != 0])
+            src_tokens = np.unique(par.source_tokens, return_counts=True, return_index=True)
+            trg_tokens = np.unique(par.target_tokens, return_counts=True, return_index=True)
+            s += np.sum(np.log(self.translation_probs[src_tokens[0]][:, trg_tokens[0]]) * post[src_tokens[1]][:, trg_tokens[1]] * src_tokens[2][:, np.newaxis] * trg_tokens[2][np.newaxis, :], where=self.translation_probs[src_tokens[0]][:, trg_tokens[0]] != 0)
+        #     for i in range(post.shape[0]):
+        #         for j in range(post.shape[1]):
+        #             C[S_d[src_tokens[i]], T_d[trg_tokens[j]]] += post[i, j]
+        # return np.sum((np.log(np.clip(self.translation_probs[S][:, T], 1e-70, 1)) * C)[self.translation_probs[S][:, T] != 0])
+        return s
 
     def _m_step(self, parallel_corpus: List[TokenizedSentencePair], posteriors: List[np.array], verbose=0):
         """
@@ -145,22 +148,24 @@ class WordAligner(BaseAligner):
         Returns:
             elbo:  the value of evidence lower bound after applying parameter updates
         """
-        S = set(np.concatenate([par.source_tokens for par in parallel_corpus], axis=0))
-        T = set(np.concatenate([par.target_tokens for par in parallel_corpus], axis=0))
-        if verbose:
-            print(f'S, T built. S_shape:{len(S)}, T_shape:{len(T)}')
+        # S = set(np.concatenate([par.source_tokens for par in parallel_corpus], axis=0))
+        # T = set(np.concatenate([par.target_tokens for par in parallel_corpus], axis=0))
+        # if verbose:
+        #     print(f'S, T built. S_shape:{len(S)}, T_shape:{len(T)}')
         
-        # A = np.zeros((len(S), len(T)))
-        T = list(T)
-        self.translation_probs[:, T] = 0
+        # # A = np.zeros((len(S), len(T)))
+        # T = list(T)
+        # self.translation_probs[:, T] = 0
+        self.translation_probs.fill(0)
 
         for post, par in zip(posteriors, parallel_corpus):
-            src_tokens = par.source_tokens
-            trg_tokens = par.target_tokens
-            for i in range(post.shape[0]):
-                for j in range(post.shape[1]):
-                    self.translation_probs[src_tokens[i], trg_tokens[j]] += post[i, j]
-        self.translation_probs[:, T] /= self.translation_probs[:, T].sum(axis=1, keepdims=True)
+            src_tokens = np.unique(par.source_tokens, return_counts=True, return_index=True)
+            trg_tokens = np.unique(par.target_tokens, return_counts=True, return_index=True)
+            self.translation_probs[src_tokens[0]][:, trg_tokens[0]] += post[src_tokens[1]][:, trg_tokens[1]] * src_tokens[2][:, np.newaxis] * trg_tokens[2][np.newaxis, :]
+            # for i in range(post.shape[0]):
+            #     for j in range(post.shape[1]):
+            #         self.translation_probs[src_tokens[i], trg_tokens[j]] += post[i, j]
+        self.translation_probs /= self.translation_probs.sum(axis=1, keepdims=True)
 
         if verbose:
             print('Computing ELBO...')
