@@ -34,7 +34,7 @@ class LabeledAlignment:
     possible: List[Tuple[int, int]]
 
 
-def extract_sentences(filename: str) -> Tuple[List[SentencePair], List[LabeledAlignment]]:
+def extract_sentences(filename: str, normalize=False) -> Tuple[List[SentencePair], List[LabeledAlignment]]:
     """
     Given a file with tokenized parallel sentences and alignments in XML format, return a list of sentence pairs
     and alignments for each sentence.
@@ -59,12 +59,17 @@ def extract_sentences(filename: str) -> Tuple[List[SentencePair], List[LabeledAl
     # parser = ET.XMLParser(encoding='utf-8')
     # tree = ET.parse(filename, parser=parser)
     # print(content)
+    if normalize:
+        import unicodedata
     root = ET.fromstring(content)
     sentence_pairs = []
     alignments = []
     for child in root:
         tmp_dir = {ch.tag: ch.text for ch in child}
-        sentence_pairs.append(SentencePair(source=tmp_dir['english'].split(), target=tmp_dir['czech'].split()))
+        if not normalize:
+            sentence_pairs.append(SentencePair(source=tmp_dir['english'].split(), target=tmp_dir['czech'].split()))
+        else:
+            sentence_pairs.append(SentencePair(source=[s.lower() for s in tmp_dir['english'].split()], target=[unicodedata.normalize('NFC', s).lower() for s in tmp_dir['czech'].split()]))
         alignments.append(LabeledAlignment(sure=str_pairs2tuple(tmp_dir['sure']), possible=str_pairs2tuple(tmp_dir['possible'])))
 
     return sentence_pairs, alignments
